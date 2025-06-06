@@ -81,3 +81,7 @@ func (u *UI) ShowMeetingReminder(message, link string) {
 		url,
 	)
 }
+
+type MeetingReminderDisplayer interface {
+	ShowMeetingReminder(message, link string)
+}

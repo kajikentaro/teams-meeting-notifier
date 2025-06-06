@@ -10,12 +10,12 @@ import (
 )
 
 type CalendarService struct {
-	Repo                 *repositories.Repository
-	UI                   *ui.UI
+	Repo                 repositories.CalendarEventFetcher
+	UI                   ui.MeetingReminderDisplayer
 	WatchIntervalMinutes int
 }
 
-func NewCalendarService(repo *repositories.Repository, ui *ui.UI, watchIntervalMinutes int) *CalendarService {
+func NewCalendarService(repo repositories.CalendarEventFetcher, ui ui.MeetingReminderDisplayer, watchIntervalMinutes int) *CalendarService {
 	return &CalendarService{Repo: repo, UI: ui, WatchIntervalMinutes: watchIntervalMinutes}
 }
 

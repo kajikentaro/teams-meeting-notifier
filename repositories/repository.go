@@ -72,3 +72,7 @@ func (r *Repository) FetchCalendarEvents() ([]map[string]interface{}, error) {
 
 	return calendarEvents, nil
 }
+
+type CalendarEventFetcher interface {
+	FetchCalendarEvents() ([]map[string]interface{}, error)
+}
