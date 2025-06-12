@@ -5,41 +5,43 @@ import (
 	"log"
 	"time"
 
-	"github.com/kajikentaro/meeting-reminder/repositories"
-	"github.com/kajikentaro/meeting-reminder/ui"
+	"github.com/kajikentaro/meeting-reminder/utils/xtime"
 )
 
-type CalendarService struct {
-	Repo                 *repositories.Repository
-	UI                   *ui.UI
-	WatchIntervalMinutes int
+//go:generate mockgen -destination=../mocks/mock_microsoft_repository.go -package=mocks . MicrosoftRepository,UI
+type MicrosoftRepository interface {
+	FetchCalendarEvents() ([]map[string]interface{}, error)
 }
 
-func NewCalendarService(repo *repositories.Repository, ui *ui.UI, watchIntervalMinutes int) *CalendarService {
-	return &CalendarService{Repo: repo, UI: ui, WatchIntervalMinutes: watchIntervalMinutes}
+type UI interface {
+	ShowMeetingReminder(message, location string)
+}
+
+type CalendarService struct {
+	repo          MicrosoftRepository
+	ui            UI
+	watchInterval time.Duration
+}
+
+func NewCalendarService(repo MicrosoftRepository, ui UI, watchInterval time.Duration) *CalendarService {
+	return &CalendarService{repo: repo, ui: ui, watchInterval: watchInterval}
 }
 
 func (s *CalendarService) WaitUntilNextInterval() {
-	now := time.Now()
-	minutes := now.Minute()
-	seconds := now.Second()
-	nanoseconds := now.Nanosecond()
-	waitMin := s.WatchIntervalMinutes - (minutes % s.WatchIntervalMinutes)
-	if waitMin == s.WatchIntervalMinutes && (seconds > 0 || nanoseconds > 0) {
-		waitMin = s.WatchIntervalMinutes
-	}
-	wait := time.Duration(waitMin)*time.Minute - time.Duration(seconds)*time.Second - time.Duration(nanoseconds)
-	time.Sleep(wait)
+	now := xtime.Now()
+	now = now.Truncate(time.Duration(s.watchInterval))
+	next := now.Add(s.watchInterval)
+	time.Sleep(time.Until(next))
 }
 
-func isSameTimeMinute(t1, t2 time.Time) bool {
-	t1 = t1.Truncate(time.Minute)
-	t2 = t2.Truncate(time.Minute)
+func (s *CalendarService) isSameTime(t1, t2 time.Time) bool {
+	t1 = t1.Truncate(s.watchInterval)
+	t2 = t2.Truncate(s.watchInterval)
 	return t1.Equal(t2)
 }
 
 func (s *CalendarService) FetchAndDisplayEvents() {
-	events, err := s.Repo.FetchCalendarEvents()
+	events, err := s.repo.FetchCalendarEvents()
 	if err != nil {
 		log.Printf("Error fetching calendar events: %v", err)
 		return
@@ -71,7 +73,7 @@ func (s *CalendarService) FetchAndDisplayEvents() {
 			continue
 		}
 
-		if !isSameTimeMinute(startTime, time.Now()) {
+		if !s.isSameTime(startTime, xtime.Now()) {
 			continue
 		}
 
@@ -79,7 +81,7 @@ func (s *CalendarService) FetchAndDisplayEvents() {
 		log.Println("Meeting found:", subject, "at", startTime.Format("15:04"))
 		location, _ := event["location"].(map[string]interface{})["displayName"].(string)
 		msg := fmt.Sprintf("%s<br/><br/>Start: %s", subject, startTime.Format("15:04"))
-		s.UI.ShowMeetingReminder(msg, location)
+		s.ui.ShowMeetingReminder(msg, location)
 	}
 
 	if !found {

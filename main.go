@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"os"
+	"time"
 
 	"github.com/joho/godotenv"
 	"github.com/kajikentaro/meeting-reminder/auth"
@@ -58,10 +59,10 @@ func main() {
 	)
 
 	// Initialize Repository with Auth
-	repoInstance := repositories.NewRepository(authInstance)
+	microsoftRepo := repositories.NewMicrosoftRepository(authInstance)
 
 	// Initialize Calendar Service
-	calendarService := services.NewCalendarService(repoInstance, uiInstance, 1)
+	calendarService := services.NewCalendarService(microsoftRepo, uiInstance, time.Minute)
 
 	// Start the event watcher
 	calendarService.StartEventWatcher()
