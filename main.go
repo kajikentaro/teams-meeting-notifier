@@ -51,12 +51,15 @@ func main() {
 	redirectURL := "http://localhost:9091/callback" // Fixed
 
 	// Initialize Auth
-	authInstance := auth.NewAuth(
+	authInstance, err := auth.NewAuth(
 		clientID,
 		clientSecret,
 		redirectURL,
 		tenantID,
 	)
+	if err != nil {
+		log.Fatal("Failed to initialize auth:", err)
+	}
 
 	// Initialize Repository with Auth
 	microsoftRepo := repositories.NewMicrosoftRepository(authInstance)

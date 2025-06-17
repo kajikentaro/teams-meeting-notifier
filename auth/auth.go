@@ -25,7 +25,7 @@ type Auth struct {
 	Token        *oauth2.Token
 }
 
-func NewAuth(clientID, clientSecret, redirectURL, tenantID string) *Auth {
+func NewAuth(clientID, clientSecret, redirectURL, tenantID string) (*Auth, error) {
 	endpoint := microsoft.AzureADEndpoint(tenantID)
 	authInstance := &Auth{
 		ClientID:     clientID,
@@ -43,18 +43,29 @@ func NewAuth(clientID, clientSecret, redirectURL, tenantID string) *Auth {
 
 	// Check for saved token
 	token, err := loadToken()
-	if err == nil && token.Valid() {
+	if err == nil {
+		log.Println("Loaded saved token, checking validity...")
 		authInstance.Token = token
-		log.Println("Using saved refresh token.")
-	} else {
-		log.Println("No valid token found. Authenticating...")
-		authInstance.Token = authInstance.authenticate()
-		if err := saveToken(authInstance.Token); err != nil {
-			log.Printf("Failed to save token: %v", err)
+		if _, err = authInstance.GetAccessToken(); err == nil {
+			log.Println("Saved token is valid, using it for authentication.")
+			return authInstance, nil
 		}
+		log.Println("Saved token is invalid, starting authentication process...")
+	} else {
+		log.Println("No saved token found, starting authentication process...")
 	}
 
-	return authInstance
+	token, err = authenticate(authInstance.OAuth2Config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to authenticate: %w", err)
+	}
+	authInstance.Token = token
+
+	if err := saveToken(authInstance.Token); err != nil {
+		return nil, fmt.Errorf("failed to save token: %w", err)
+	}
+
+	return authInstance, nil
 }
 
 func (a *Auth) GetAccessToken() (*oauth2.Token, error) {
@@ -79,9 +90,9 @@ func (a *Auth) GetAccessToken() (*oauth2.Token, error) {
 	return nil, fmt.Errorf("no valid refresh token available")
 }
 
-func (a *Auth) authenticate() *oauth2.Token {
+func authenticate(config *oauth2.Config) (*oauth2.Token, error) {
 	state := "random_state" // Random string for CSRF protection
-	authURL := a.OAuth2Config.AuthCodeURL(state)
+	authURL := config.AuthCodeURL(state)
 
 	log.Printf("Open the following URL in your browser to authenticate:\n%s\n", authURL)
 
@@ -116,12 +127,12 @@ func (a *Auth) authenticate() *oauth2.Token {
 	defer cancel()
 	_ = srv.Shutdown(ctx)
 
-	token, err := a.OAuth2Config.Exchange(context.TODO(), code)
+	token, err := config.Exchange(context.TODO(), code)
 	if err != nil {
-		log.Fatalf("Error exchanging code for token: %v", err)
+		return nil, err
 	}
 
-	return token
+	return token, nil
 }
 
 func saveToken(token *oauth2.Token) error {
