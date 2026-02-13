@@ -1,10 +1,10 @@
 package services
 
 import (
-	"fmt"
 	"log"
 	"time"
 
+	"github.com/kajikentaro/meeting-reminder/ui"
 	"github.com/kajikentaro/meeting-reminder/utils/xtime"
 )
 
@@ -14,7 +14,7 @@ type MicrosoftRepository interface {
 }
 
 type UI interface {
-	ShowMeetingReminder(message, location string)
+	ShowMeetingReminder(events []ui.UIEvents)
 }
 
 type CalendarService struct {
@@ -47,7 +47,7 @@ func (s *CalendarService) FetchAndDisplayEvents() {
 		return
 	}
 
-	found := false
+	var filteredEvents []ui.UIEvents
 
 	for _, event := range events {
 		start, ok := event["start"].(map[string]interface{})
@@ -77,16 +77,21 @@ func (s *CalendarService) FetchAndDisplayEvents() {
 			continue
 		}
 
-		found = true
 		log.Println("Meeting found:", subject, "at", startTime.Format("15:04"))
 		location, _ := event["location"].(map[string]interface{})["displayName"].(string)
-		msg := fmt.Sprintf("%s<br/><br/>Start: %s", subject, startTime.Format("15:04"))
-		s.ui.ShowMeetingReminder(msg, location)
+		filteredEvents = append(filteredEvents, ui.UIEvents{
+			Title:     subject,
+			StartTime: startTime,
+			Link:      location,
+		})
 	}
 
-	if !found {
+	if len(filteredEvents) <= 0 {
 		log.Println("No meetings found at this time.")
+		return
 	}
+
+	s.ui.ShowMeetingReminder(filteredEvents)
 }
 
 func (s *CalendarService) StartEventWatcher() {

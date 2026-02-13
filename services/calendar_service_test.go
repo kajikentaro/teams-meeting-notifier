@@ -1,17 +1,29 @@
 package services
 
 import (
-	"fmt"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/kajikentaro/meeting-reminder/mocks"
+	"github.com/kajikentaro/meeting-reminder/ui"
 	"github.com/kajikentaro/meeting-reminder/utils/xtime"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 )
+
+func createMockEvent(time time.Time, subject string) map[string]interface{} {
+	return map[string]interface{}{
+		"start": map[string]interface{}{
+			"dateTime": time.Format(TIME_LAYOUT),
+		},
+		"subject": subject,
+		"location": map[string]interface{}{
+			"displayName": "Test Location",
+		},
+	}
+}
 
 var TIME_LAYOUT = "2006-01-02T15:04:05.0000000"
 
@@ -70,33 +82,68 @@ func TestFetchAndDisplayEvents(t *testing.T) {
 			events := []map[string]interface{}{}
 
 			for _, event := range tc.events {
-				events = append(events, map[string]interface{}{
-					"start": map[string]interface{}{
-						"dateTime": event.start.Format(TIME_LAYOUT),
-					},
-					"subject": "Test Meeting",
-					"location": map[string]interface{}{
-						"displayName": "Test Location",
-					},
-				})
+				events = append(events, createMockEvent(event.start, "Test Meeting"))
 			}
 
 			repo := mocks.NewMockMicrosoftRepository(ctrl)
 			repo.EXPECT().FetchCalendarEvents().Return(events, nil)
-			ui := mocks.NewMockUI(ctrl)
+			uiMock := mocks.NewMockUI(ctrl)
+			expectedEvents := []ui.UIEvents{}
 			for _, event := range tc.events {
 				if event.shouldFound {
-					ui.EXPECT().ShowMeetingReminder(
-						fmt.Sprintf("Test Meeting<br/><br/>Start: %s", event.start.Format("15:04")),
-						"Test Location",
-					).Times(1)
+					expectedEvents = append(expectedEvents, ui.UIEvents{
+						Title:     "Test Meeting",
+						StartTime: event.start,
+						Link:      "Test Location",
+					})
 				}
 			}
+			if len(expectedEvents) > 0 {
+				uiMock.EXPECT().ShowMeetingReminder(expectedEvents).Times(1)
+			} else {
+				uiMock.EXPECT().ShowMeetingReminder(gomock.Any()).Times(0)
+			}
 
-			service := NewCalendarService(repo, ui, tc.watchInterval)
+			service := NewCalendarService(repo, uiMock, tc.watchInterval)
 			service.FetchAndDisplayEvents()
 		})
 	}
+}
+
+func TestMultipleEventsAtSameTime(t *testing.T) {
+	NOW := time.Date(2033, 3, 3, 3, 3, 33, 333, time.UTC)
+	xtime.Mock(NOW)
+	defer xtime.Unmock()
+
+	eventTime := time.Date(2033, 3, 3, 3, 3, 0, 0, time.UTC)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	events := []map[string]interface{}{
+		createMockEvent(eventTime, "Event A"),
+		createMockEvent(eventTime, "Event B"),
+	}
+
+	repo := mocks.NewMockMicrosoftRepository(ctrl)
+	repo.EXPECT().FetchCalendarEvents().Return(events, nil)
+	uiMock := mocks.NewMockUI(ctrl)
+
+	uiMock.EXPECT().ShowMeetingReminder([]ui.UIEvents{
+		{
+			Title:     "Event A",
+			StartTime: eventTime,
+			Link:      "Test Location",
+		},
+		{
+			Title:     "Event B",
+			StartTime: eventTime,
+			Link:      "Test Location",
+		},
+	}).Times(1)
+
+	service := NewCalendarService(repo, uiMock, time.Minute)
+	service.FetchAndDisplayEvents()
 }
 
 func TestFetchAndDisplayEvents_NoEvents(t *testing.T) {
@@ -104,12 +151,12 @@ func TestFetchAndDisplayEvents_NoEvents(t *testing.T) {
 	defer ctrl.Finish()
 
 	repo := mocks.NewMockMicrosoftRepository(ctrl)
-	ui := mocks.NewMockUI(ctrl)
+	uiMock := mocks.NewMockUI(ctrl)
 
-	service := NewCalendarService(repo, ui, time.Minute)
+	service := NewCalendarService(repo, uiMock, time.Minute)
 
 	repo.EXPECT().FetchCalendarEvents().Return([]map[string]interface{}{}, nil)
-	ui.EXPECT().ShowMeetingReminder(gomock.Any(), gomock.Any()).Times(0)
+	uiMock.EXPECT().ShowMeetingReminder(gomock.Any()).Times(0)
 
 	service.FetchAndDisplayEvents()
 }

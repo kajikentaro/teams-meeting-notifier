@@ -12,6 +12,7 @@ package mocks
 import (
 	reflect "reflect"
 
+	ui "github.com/kajikentaro/meeting-reminder/ui"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -79,13 +80,13 @@ func (m *MockUI) EXPECT() *MockUIMockRecorder {
 }
 
 // ShowMeetingReminder mocks base method.
-func (m *MockUI) ShowMeetingReminder(message, location string) {
+func (m *MockUI) ShowMeetingReminder(events []ui.UIEvents) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "ShowMeetingReminder", message, location)
+	m.ctrl.Call(m, "ShowMeetingReminder", events)
 }
 
 // ShowMeetingReminder indicates an expected call of ShowMeetingReminder.
-func (mr *MockUIMockRecorder) ShowMeetingReminder(message, location any) *gomock.Call {
+func (mr *MockUIMockRecorder) ShowMeetingReminder(events any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ShowMeetingReminder", reflect.TypeOf((*MockUI)(nil).ShowMeetingReminder), message, location)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ShowMeetingReminder", reflect.TypeOf((*MockUI)(nil).ShowMeetingReminder), events)
 }
